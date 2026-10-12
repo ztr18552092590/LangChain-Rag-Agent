@@ -1,3 +1,4 @@
+from datetime import datetime
 from langchain_core.tools import tool
 from rag.rag_service import RagSummarizeService
 import random
@@ -5,15 +6,15 @@ from utils.config_handler import agent_conf
 from utils.path_tool import get_abs_path
 import os
 from utils.logger_handler import logger
+from agent.runtime_ctx import get_session
 
 rag = RagSummarizeService()
 
 user_ids = ["1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010"]
-month_arr = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06",
-    "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"]
+cities = ["深圳", "合肥", "杭州"]
 external_data = {}
 
-@tool(description="从向量存储中检索参考资料")
+@tool(description="从向量库检索扫地/扫拖机器人相关原文。query用简短检索词（如「小户型 宠物 选购」「开机无反应」），不要传整句口语。返回原文片段；若返回知识库未覆盖，禁止编造。")
 def rag_summarize(query: str) -> str:
     return rag.rag_summarize(query)
 
@@ -23,15 +24,15 @@ def get_weather(city: str) -> str:
 
 @tool(description="获取用户所在城市的名称，以纯字符串形式返回")
 def get_user_location() -> str:
-    return random.choice(["深圳", "合肥", "杭州"])
+    return get_session().get("city") or random.choice(cities)
 
 @tool(description="获取用户的ID，以纯字符串形式返回")
 def get_user_id() -> str:
-    return random.choice(user_ids)
+    return get_session().get("user_id") or random.choice(user_ids)
 
-@tool(description="获取当前月份，以纯字符串形式返回")
+@tool(description="获取当前月份，以纯字符串形式返回，格式YYYY-MM")
 def get_current_month() -> str:
-    return random.choice(month_arr)
+    return datetime.now().strftime("%Y-%m")
 
 def generate_external_data():
     if not external_data:

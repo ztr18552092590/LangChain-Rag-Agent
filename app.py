@@ -1,4 +1,5 @@
 import time
+import uuid
 
 import streamlit as st
 from agent.react_agent import ReactAgent
@@ -10,6 +11,9 @@ st.divider()
 
 if "agent" not in st.session_state:
     st.session_state["agent"] = ReactAgent()
+
+if "thread_id" not in st.session_state:
+    st.session_state["thread_id"] = str(uuid.uuid4())
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
@@ -25,7 +29,10 @@ if prompt:
 
     response_messages: list[str] = []
     with st.spinner("智能客服思考中..."):
-        res_stream = st.session_state["agent"].execute_stream(prompt)
+        res_stream = st.session_state["agent"].execute_stream(
+            prompt,
+            thread_id=st.session_state["thread_id"],
+        )
 
         def stream_generator(generator, cache_list):
             """逐字流式输出，同时缓存完整响应"""
@@ -36,5 +43,9 @@ if prompt:
                     yield char
 
         st.chat_message("assistant").write_stream(stream_generator(res_stream, response_messages))
-        st.session_state["messages"].append({"role": "assistant", "content": response_messages[-1]})
+        reply = "".join(response_messages).strip()
+        st.session_state["messages"].append({
+            "role": "assistant",
+            "content": reply or "暂时没有生成有效回复，请再试一次。",
+        })
         st.rerun()

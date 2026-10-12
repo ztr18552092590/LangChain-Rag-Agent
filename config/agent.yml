@@ -1,1 +1,7 @@
 external_data_path: data/external/records.csv
+# 当前问题之前，最多保留的完整对话轮数（一轮 = user + assistant）
+max_history_turns: 6
+# 单轮对话最多允许的工具调用次数（含被拦截的尝试）
+max_tool_calls: 6
+# checkpointer 中最多保留的消息条数（含工具轨迹），超出则丢掉最旧的
+max_checkpoint_messages: 40
