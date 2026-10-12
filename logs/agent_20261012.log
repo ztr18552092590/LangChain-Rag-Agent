@@ -1,3 +1,0 @@
-2026-10-12 13:26:51,182 - agent - INFO - checkpointer.py:19 - [checkpointer]已启用 SQLite 会话记忆: D:\ztr18\AI智能体\智扫通智能客服\data/checkpoints.sqlite
-2026-10-12 13:27:18,259 - agent - INFO - middleware.py:139 - [log_before_model]即将调用模型，带有1条消息。
-2026-10-12 13:27:18,260 - agent - DEBUG - middleware.py:140 - [log_before_model]HumanMessage | 小户型适合什么
