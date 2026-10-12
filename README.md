@@ -1,144 +1,104 @@
-# 智扫通 · 扫地机器人智能客服
+# 智扫通智能客服
 
-基于 **LangChain ReAct Agent** 与 **RAG 检索增强** 的扫地机器人智能客服 Demo。用户可通过 Streamlit 对话界面咨询保养、选购、故障排除等问题，也可生成个人使用报告。
+基于 **LangChain ReAct Agent + RAG** 的扫地机器人售后助手：能做选购 / 故障 / 保养问答，也能按使用记录生成个性化报告。
+
+仓库：[LangChain-Rag-Agent](https://github.com/ztr18552092590/LangChain-Rag-Agent)
 
 ## 功能
 
-- **专业问答**：从知识库检索维护保养、选购指南、故障排除与 FAQ，再由大模型总结作答
-- **场景化建议**：结合用户位置与天气（当前为演示用 mock）给出环境适配建议
-- **个人使用报告**：按用户 ID 与月份读取模拟使用记录，输出 Markdown 报告
-- **流式对话**：Streamlit 聊天界面逐字输出回复
+- **ReAct Agent**：通义千问 `qwen3-max` 自主规划工具调用
+- **RAG**：Chroma + `text-embedding-v4`，按编号条目入库，只回原文；距离过大返回「知识库未覆盖」
+- **意图分流**：规则判断「知识问答 / 使用报告」，中间件限制可用工具和调用顺序
+- **动态提示词**：问答用客服 prompt；调用 `fill_context_for_report` 后切换为报告写手 prompt
+- **会话记忆**：LangGraph SQLite checkpointer（`data/checkpoints.sqlite`），与 FAQ 向量库分开
 
 ## 技术栈
 
-| 类别 | 技术 |
-|------|------|
+| 层级 | 选型 |
+| --- | --- |
+| 聊天模型 | 通义千问 `qwen3-max`（`ChatTongyi`） |
+| 向量模型 | DashScope `text-embedding-v4` |
+| Agent | LangChain `create_agent` + LangGraph |
+| 向量库 | Chroma |
+| 会话记忆 | `langgraph-checkpoint-sqlite` |
 | 界面 | Streamlit |
-| Agent | LangChain `create_agent`（ReAct + 工具调用） |
-| 知识库 | Chroma + 通义千问 Embedding |
-| 大模型 | 通义千问（DashScope）`qwen3-max` |
-| 文档解析 | TXT / PDF（pypdf） |
+| 配置 | YAML |
 
-## 项目结构
+## 环境
 
-```
-├── app.py                 # Streamlit 入口
-├── agent/                 # ReAct Agent 与工具
-├── rag/                   # 向量入库与 RAG 总结
-├── model/                 # Chat / Embedding 工厂
-├── config/                # YAML 配置
-├── prompts/               # 系统提示词与 RAG / 报告提示词
-├── data/                  # 知识库源文件与模拟使用记录
-├── utils/                 # 配置、路径、日志、文档加载
-└── chroma_db/             # 向量库持久化（本地生成，不入库）
-```
-
-## 环境要求
-
-- Python 3.10+（推荐 3.12）
-- [阿里云 DashScope API Key](https://dashscope.console.aliyun.com/)（通义千问）
-
-## 快速开始
-
-### 1. 克隆仓库
-
-```bash
-git clone https://github.com/<your-username>/<your-repo>.git
-cd <your-repo>
-```
-
-### 2. 创建虚拟环境并安装依赖
-
-```bash
-python -m venv .venv
-
-# Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-
-# macOS / Linux
-# source .venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-### 3. 配置 API Key
-
-在终端中设置环境变量（不要把密钥写进代码或提交到 Git）：
+- Python 3.10+
+- 环境变量 **`DASHSCOPE_API_KEY`**（LangChain 会自动读取，业务代码不写死 Key）
 
 ```powershell
-# Windows PowerShell
-$env:DASHSCOPE_API_KEY = "sk-你的密钥"
+pip install streamlit langchain langchain-community langchain-chroma langgraph langgraph-checkpoint-sqlite dashscope pyyaml chromadb
 ```
 
-```bash
-# macOS / Linux
-export DASHSCOPE_API_KEY="sk-你的密钥"
-```
+## 启动
 
-聊天模型与向量模型名称见 `config/rag.yml`（默认 `qwen3-max`、`text-embedding-v4`）。
+在项目根目录：
 
-### 4. 构建知识库
-
-将 `.txt` / `.pdf` 放到 `data/` **目录根下**（不会递归扫描子目录，`data/external/` 不会进入向量库）。
-
-在**项目根目录**执行：
-
-```bash
+```powershell
+# 1. 首次或知识库变更后，重建向量库（会调用 embedding）
+#    若已有旧的按字数切分的索引，先删掉再导入
+Remove-Item -Recurse -Force chroma_db, md5.text -ErrorAction SilentlyContinue
 python -m rag.vector_store
+
+# 2. 启动界面
+streamlit run app.py
 ```
 
-首次或更新文档后都需要执行。向量数据会写入 `chroma_db/`。
+浏览器打开 `http://localhost:8501`。
 
-### 5. 启动 Web 界面
+## 目录
 
-Windows 上 Streamlit 默认端口 **8501** 常被 Hyper-V / WSL 排除占用，会出现 `WinError 10013`。请改用其他端口：
-
-```bash
-streamlit run app.py --server.port 8000
+```text
+app.py                 Streamlit 入口
+agent/
+  react_agent.py       Agent 组装、流式输出、checkpointer
+  intent.py            问答 / 报告意图分流
+  checkpointer.py      SQLite 会话记忆
+  tools/               工具 + middleware（拦截、提示词切换、裁剪历史）
+rag/
+  splitter.py          按「1. 2. 3.」切完整知识条目
+  vector_store.py      Chroma 入库 / 检索
+  rag_service.py       只返回原文 + 距离过滤
+prompts/               客服 prompt、报告 prompt
+config/                rag.yml / chroma.yml / agent.yml / prompts.yml
+data/                  FAQ 文本；external/records.csv 为模拟使用记录
 ```
 
-浏览器打开：http://localhost:8000
+`data/external` 不会进入 FAQ 向量库。会话 checkpoint 在 `data/checkpoints.sqlite`。
 
-### 可选：命令行试跑
+## 对话怎么走
 
-```bash
-# Agent（无界面）
-python -m agent.react_agent
+**知识问答**（如「开机指示灯不亮怎么办」）
 
-# 仅测试 RAG 总结
-python -m rag.rag_service
-```
+1. 意图 = 问答，只开放检索 / 定位 / 天气
+2. `rag_summarize` 用短检索词查向量库
+3. 距离 ≤ `max_distance` 则回原文，由 Agent 组织回答；否则「知识库未覆盖」，禁止编造
 
-## 对话示例
+**使用报告**（如「生成我 2025 年 11 月的使用报告」）
 
-- 「扫地机器人滤网多久换一次？」
-- 「我所在地区现在这种天气，扫地机该怎么保养？」
-- 「帮我生成一份本月的个人使用报告」
+1. 意图 = 报告
+2. 顺序由中间件卡住：`get_user_id` → `get_current_month`（用户指定了月份则用指定值）→ `fill_context_for_report`（切换报告 prompt）→ `fetch_external_data`
+3. 拿到记录后才允许再检索保养建议
 
-报告类问题会按固定流程调用：获取用户 ID → 获取月份 → `fill_context_for_report` → `fetch_external_data`（必要时再检索知识库）。
+同一浏览器会话内 user_id、城市固定；`get_current_month` 返回真实 `YYYY-MM`。演示报告时建议指定 CSV 中存在的月份（当前模拟数据多为 2025 年）。
 
-## 配置说明
+## 配置
 
-| 文件 | 作用 |
-|------|------|
-| `config/rag.yml` | 聊天模型、Embedding 模型 |
-| `config/chroma.yml` | 向量库路径、检索条数 `k`、切分参数、知识库目录 |
-| `config/agent.yml` | 外部使用记录 CSV 路径 |
-| `config/prompts.yml` | 提示词文件路径 |
-| `data/external/records.csv` | 模拟用户使用记录 |
+| 文件 | 常用项 |
+| --- | --- |
+| `config/rag.yml` | `chat_model_name`、`embedding_model_name` |
+| `config/chroma.yml` | `k`（默认 6）、`max_distance`（默认 1.5，越大越容易召回） |
+| `config/agent.yml` | `max_tool_calls`、`max_checkpoint_messages` |
 
-请始终在项目根目录启动命令，否则相对路径 `chroma_db`、`data` 可能找不到。
+召回太松：把 `max_distance` 调小；总报未覆盖：调大。改分块或知识文件后必须重建 `chroma_db`。
 
-## 工具说明
+## 可试的问题
 
-部分工具为演示用 mock（天气、位置、用户 ID、当前月份），非正式线上接口。`rag_summarize` 与 `fetch_external_data` 会读取本地知识库和 CSV。
-
-## 注意事项
-
-- **不要提交** `DASHSCOPE_API_KEY`、`.env`、本地日志和向量库。仓库已提供 `.gitignore`。
-- 知识库文件只扫描 `data/` 下一层的 `txt` / `pdf`。
-- 更换知识库文档后请重新执行 `python -m rag.vector_store`。
-
-## License
-
-本项目仅供学习与演示使用。
+- 小户型有宠物适合什么扫地机器人？
+- 开机指示灯不亮怎么办？
+- 扫地机器人在我所在地区的气温下如何保养？
+- 生成我 2025 年 11 月的使用报告
+- （上一句之后）刚才说的那款要怎么保养？
